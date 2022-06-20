@@ -12,8 +12,8 @@ public class CLI {
         "vpl_evaluate.sh",
         "vpl_run.sh",
         "clean.sh",
-        "Main.java.template",
-        "Solution.java.template",
+        //"Main.java.template",
+        //"Solution.java.template",
         "Checks.java.template"
     };
 

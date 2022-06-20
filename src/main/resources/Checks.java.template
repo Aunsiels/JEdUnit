@@ -10,35 +10,17 @@ import io.vavr.Tuple2;
  * - Configure your evaluation in the configure() method.
  * - First, all methods with an @Inspection annotation will be executed (in alphabetical order)
  * - Then, all methods with a @Test annotation will be executed automatically (in alphabetical order).
- * - All test weights should sum up to 1.0.
- * - If the weights sum up to more than 1.0, points it will be truncated. 
- * - This enable bonus rules to tolerate some errors.  
  */
 public class Checks extends Constraints {
-
-    // Checks the correctness of the submission.
-    Predicate<Tuple2<Character, String>> check = d -> assertEquals(
-        Solution.countChars(d._1, d._2), 
-        Main.countChars(d._1, d._2)
-    );
-
-    // Explains the call and the expected result.
-    Function<Tuple2<Character, String>, String> explain = d -> f(
-        "countChars(%s, %s) should return %s", 
-        d._1, d._2, Solution.countChars(d._1, d._2)
-    );
-
-    // Is called on error and should return a message with actual result.
-    Function<Tuple2<Character, String>, String> onError = d -> f(
-        "but returned %s", Main.countChars(d._1, d._2)
-    );
 
     @Override
     public void configure() {
         super.configure();
 
+        // Remove here the files we want to ignore
         Config.EVALUATED_FILES.remove("Solution.java");
         Config.EVALUATED_FILES.remove("Checks.java");
+        Config.STD_OUT_REDIRECTION = "/dev/null";
 
         // Config.CHECKSTYLE = false;                  // default: true
         // Config.CHECKSTYLE_PENALITY = 5;
@@ -69,43 +51,27 @@ public class Checks extends Constraints {
         // Config.CONSOLE_OUTPUT_PENALTY = 25;
     }
 
-    @Test(weight=0.25, description="Provided example calls")
-    public void examples() {
-        test(
-            t('o', "Hello World"),
-            t('w', "Hello World")
-        ).each(check, explain, onError);
+    @Test(weight=1, description="Always True")
+    public void testTrue() {
+        this.grading(1, "Always true comment", true);
     }
 
-    @Test(weight=0.25, description="Boundary testcases (unknown test cases)")
-    public void furtherTestcases() {
-        test(
-            t('x', ""),
-            t('X', ""),
-            t('x', "x"),
-            t('X', "x"),
-            t('x', "X"),
-            t('X', "X"),
-            t('X', "ax"),
-            t('x', "Xa")
-        ).each(check, explain, onError);
+    @Test(weight=1, description="Always True Private", isPublic=false)
+    public void testTruePrivate() {
+        this.grading(1, "Always true private comment", true);
     }
 
-    @Test(weight=0.5, description="Randomized testcases")
-    public void randomizedTestcases() {
-        String r = "[a-zA-Z]{5,17}";
-        char c = c("[a-z]");
-        char C = Character.toUpperCase(c);
-
+    @Test(weight=1, description="Test square")
+    public void testSquare() {
         test(
-            t(c, s(c + "{1,7}", r, r)),
-            t(C, s(c + "{1,7}", r, r)),
-            t(c, s(r.toUpperCase(), r, C + "{1,7}")),
-            t(C, s(r.toUpperCase(), r, C + "{1,7}")),
-            t(c, s(r, C + "{1,7}", r.toLowerCase())),
-            t(C, s(r, C + "{1,7}", r.toLowerCase())),
-            t(c, s(r, c + "{1,7}", r.toUpperCase())),
-            t(C, s(r, c + "{1,7}", r.toUpperCase()))
-        ).each(check, explain, onError);
+           t(1, 1),
+           t(2, 4),
+           t(3, 10)
+        ).each(
+            d -> d._1 * d._1 == d._2,
+            d -> "This is an explanation",
+            d -> "This is an error"
+        );
     }
+
 }

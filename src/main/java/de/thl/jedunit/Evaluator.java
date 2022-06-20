@@ -26,14 +26,24 @@ import io.vavr.Tuple2;
 public class Evaluator {
 
     /**
+     * Whether to execute public or private tests.
+     */
+    protected boolean runPublicTests = true;
+
+    /**
      * The maximum points for a VPL assignment.
      */
     private static final int MAX = 100;
 
     /**
-     * The currently reached percentage of maximum points.
+     * The currently total number of points points.
      */
-    private double percentage = 0.0;
+    private double totalPoints = 0.0;
+
+    /**
+     * The currently maximum number of points points.
+     */
+    private double totalMaxPoints = 0.0;
 
     /**
      * The results of the latest executed testcase.
@@ -68,8 +78,7 @@ public class Evaluator {
      * @return points [0, 100]
      */
     public int getPoints() {
-        int report = (int)Math.round(this.percentage * MAX);
-        report = report > MAX ? MAX : report;
+        int report = (int)Math.round(this.totalPoints / this.totalMaxPoints * 100);
         report = report < 0 ? 0 : report;
         return report;
     }
@@ -83,6 +92,10 @@ public class Evaluator {
     @SafeVarargs
     public final <T> TestSeries<T> test(T... data) {
         return new TestSeries<T>(this, data);
+    }
+
+    public final void grading(int p, String comment, boolean success) {
+        grading(p, comment, () -> success, false);
     }
 
     /**
@@ -140,7 +153,7 @@ public class Evaluator {
                 redirect();
                 return false;
             }
-            this.percentage -= penalty / 100.0;
+            this.totalPoints -= penalty;
             comment(String.format("[FAILED] %s (-%d%% on total result)", remark, penalty));
             redirect();
             return true;
@@ -163,7 +176,7 @@ public class Evaluator {
                 return;
             }
             comment("Evaluation aborted! " + comment);
-            this.percentage = 0;
+            this.totalPoints = 0;
             if (REALWORLD) {
                 grade();
                 System.exit(1);
@@ -179,7 +192,7 @@ public class Evaluator {
      */
     public void grade() {
         reset();
-        comment(String.format("Current percentage: %.0f%%", this.percentage * 100));
+        comment(String.format("Current number of points: %.0f%%", this.totalPoints / this.totalMaxPoints * 100.0));
         System.out.println("Grade :=>> " + this.getPoints());
         redirect();
     }
@@ -201,7 +214,8 @@ public class Evaluator {
         int total = results.stream().map(d -> d._2).reduce(0, (a, b) -> a + b);
         double p = 100.0 * points / total;
         comment(String.format("Result for this test: %d of %d points (%.0f%%)", points, total, p));
-        this.percentage += (weight * points) / total;
+        this.totalPoints += (weight * points) / total;
+        this.totalMaxPoints += weight;
         grade();
         redirect();
     }
@@ -223,6 +237,7 @@ public class Evaluator {
         allMethodsOf(this.getClass())
             .stream()
             .filter(method -> method.isAnnotationPresent(Test.class))
+            .filter(method -> method.getAnnotation(Test.class).isPublic() == this.runPublicTests)
             .sorted((m1, m2) -> m1.getName().compareTo(m2.getName()))
             .forEach(method -> {
                 try {
@@ -252,6 +267,7 @@ public class Evaluator {
         allMethodsOf(this.getClass())
             .stream()
             .filter(method -> method.isAnnotationPresent(Inspection.class))
+            .filter(method -> method.getAnnotation(Inspection.class).isPublic() == this.runPublicTests)
             .sorted((m1, m2) -> m1.getName().compareTo(m2.getName()))
             .forEach(method -> {
                 try {
@@ -259,11 +275,11 @@ public class Evaluator {
                     Inspection i = method.getAnnotation(Inspection.class);
                     comment("- " + i.description());
                     method.invoke(this);
-                    grade();
+                    //grade();
                     comment("");
                 } catch (Exception ex) {
                     comment("Inspection " + method.getName() + " failed completely." + ex);
-                    grade();
+                    //grade();
                 }
                 results.clear();
             });
@@ -290,13 +306,13 @@ public class Evaluator {
 
                     String msg = result.substring(result.indexOf(file));
                     comment(msg);
-                    this.percentage -= Config.CHECKSTYLE_PENALTY / 100.0;
+                    this.totalPoints -= Config.CHECKSTYLE_PENALTY;
                 }
             }
             in.close();
-            if (this.percentage >= 0) comment("Everything fine");
-            if (this.percentage < 0) {
-                String msg = String.format("[CHECKSTYLE] Found violations (%d%%)", (int)(this.percentage * 100));
+            if (this.totalPoints >= 0) comment("Everything fine");
+            if (this.totalPoints < 0) {
+                String msg = String.format("[CHECKSTYLE] Found violations (%d%%)", (int)(this.totalPoints));
                 comment(msg);
             }
             grade();
@@ -322,7 +338,9 @@ public class Evaluator {
      * @since 0.2.1
      */
     protected void redirect() {
-        System.setOut(redirected);
+        if (!this.runPublicTests) {
+            System.setOut(redirected);
+        }
     }
 
     /**
@@ -340,6 +358,11 @@ public class Evaluator {
     public static final void main(String[] args) {
         try {
             Constraints check = (Constraints)Class.forName("Checks").getDeclaredConstructor().newInstance();
+            if (args.length == 1){
+                if (args[0].toLowerCase().equals("private")){
+                    check.runPublicTests = false;
+                }
+            }
             check.initStdOutRedirection();
             comment("JEdUnit " + Config.VERSION);
             comment("");

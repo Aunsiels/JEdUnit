@@ -37,4 +37,4 @@ First of all, initialize a directory on your local machine and run:
 curl -s https://raw.githubusercontent.com/nkratzke/JEdUnit/working/init.sh | sh
 ```
 
-Then we recommend to study the [Wiki](../../wiki).
+Then we recommend to study the [Wiki](https://github.com/nkratzke/JEdUnit/wiki/).

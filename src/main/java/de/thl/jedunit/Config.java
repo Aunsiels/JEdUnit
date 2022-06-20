@@ -27,7 +27,7 @@ public class Config {
      * Std-out redirection of submission code.
      * This is used to avoid injection attacks. 
      */
-    public static String STD_OUT_REDIRECTION = "console.log";
+    public static String STD_OUT_REDIRECTION = "/dev/null";
 
     /**
      * Option to evaluate the checkstyle log.

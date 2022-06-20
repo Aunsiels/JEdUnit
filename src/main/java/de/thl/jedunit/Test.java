@@ -15,4 +15,5 @@ import java.lang.annotation.Target;
 public @interface Test {
     double weight();
     String description();
+    boolean isPublic() default true;
 }

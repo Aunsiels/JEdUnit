@@ -14,4 +14,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface Inspection {
     String description();
+    boolean isPublic() default true;
 }
