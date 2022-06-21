@@ -31,6 +31,11 @@ public class Evaluator {
     protected boolean runPublicTests = true;
 
     /**
+     * Whether to stop the tests when fail or not.
+     */
+    protected boolean stopEarly = false;
+
+    /**
      * The maximum points for a VPL assignment.
      */
     private static final int MAX = 100;
@@ -123,14 +128,14 @@ public class Evaluator {
         try {
             if (check.get()) {
                 results.add(t(p, p));
-                comment("Check " + testcase + ": [OK] " + comment + " (" + p + " points)");
+                comment("Check " + testcase + ": [OK] " + comment + " (" + p + " points)", !this.runPublicTests);
             } else {
                 results.add(t(0, p));
-                comment("Check " + testcase + ": [FAILED] " + comment + " (0 of " + p + " points)");
+                comment("Check " + testcase + ": [FAILED] " + comment + " (0 of " + p + " points)", !this.runPublicTests);
             }
         } catch (Exception ex) {
             results.add(t(0, p));
-            comment("Check " + testcase + ": [FAILED due to " + ex + "] " + comment + " (0 of " + p + " points)");
+            comment("Check " + testcase + ": [FAILED due to " + ex + "] " + comment + " (0 of " + p + " points)", !this.runPublicTests);
         }
         if (!trusted) redirect();
     }
@@ -154,11 +159,11 @@ public class Evaluator {
                 return false;
             }
             this.totalPoints -= penalty;
-            comment(String.format("[FAILED] %s (-%d%% on total result)", remark, penalty));
+            comment(String.format("[FAILED] %s (-%d%% on total result)", remark, penalty), !this.runPublicTests);
             redirect();
             return true;
         } catch (Exception ex) {
-            comment("[FAILED due to " + ex + "] " + remark);
+            comment("[FAILED due to " + ex + "] " + remark, !this.runPublicTests);
             redirect();
             return true;
         }
@@ -175,14 +180,14 @@ public class Evaluator {
                 redirect();
                 return;
             }
-            comment("Evaluation aborted! " + comment);
+            comment("Evaluation aborted! " + comment, !this.runPublicTests);
             this.totalPoints = 0;
             if (REALWORLD) {
                 grade();
                 System.exit(1);
             }
         } catch (Exception ex) {
-            comment("[FAILED due to " + ex + "] " + comment);
+            comment("[FAILED due to " + ex + "] " + comment, !this.runPublicTests);
         }
         redirect();
     }
@@ -190,11 +195,13 @@ public class Evaluator {
     /**
      * Reports the current points to VPL via console output (truncated to [0, 100]).
      */
-    public void grade() {
+    public boolean grade() {
         reset();
-        comment(String.format("Current number of points: %.0f%%", this.totalPoints / this.totalMaxPoints * 100.0));
+        comment(String.format("Current number of points: %.0f%%", this.totalPoints / this.totalMaxPoints * 100.0),
+                !this.runPublicTests);
         System.out.println("Grade :=>> " + this.getPoints());
         redirect();
+        return true;
     }
 
     /**
@@ -202,22 +209,24 @@ public class Evaluator {
      * @param results List of results [(n, of possible points)]
      * @param weight Weight to be considered for total sum
      */
-    public void grade(double weight, List<Tuple2<Integer, Integer>> results) {
+    public boolean grade(double weight, List<Tuple2<Integer, Integer>> results) {
         reset();
         if (results.isEmpty() || weight <= 0.0) {
-            comment("No results or weight for this test");
+            comment("No results or weight for this test", !this.runPublicTests);
             grade();
             redirect();
-            return;
+            return false;
         }
         int points = results.stream().map(d -> d._1).reduce(0, (a, b) -> a + b);
         int total = results.stream().map(d -> d._2).reduce(0, (a, b) -> a + b);
         double p = 100.0 * points / total;
-        comment(String.format("Result for this test: %d of %d points (%.0f%%)", points, total, p));
+        comment(String.format("Result for this test: %d of %d points (%.0f%%)", points, total, p),
+                !this.runPublicTests);
         this.totalPoints += (weight * points) / total;
         this.totalMaxPoints += weight;
         grade();
         redirect();
+        return points == total;
     }
 
     private List<Method> allMethodsOf(Class<?> clazz) {
@@ -225,6 +234,19 @@ public class Evaluator {
         List<Method> methods = allMethodsOf(clazz.getSuperclass());
         methods.addAll(Arrays.asList(clazz.getDeclaredMethods()));
         return methods;
+    }
+
+    private static int compareTwoTestMethods(Method m1, Method m2){
+        Test t1 = m1.getAnnotation(Test.class);
+        Test t2 = m2.getAnnotation(Test.class);
+        double firstComp = t2.priority() - t1.priority();
+        if (firstComp == 0) {
+            return m1.getName().compareTo(m2.getName());
+        } else if (firstComp < 0){
+            return -1;
+        } else {
+            return 1;
+        }
     }
 
     /**
@@ -238,21 +260,24 @@ public class Evaluator {
             .stream()
             .filter(method -> method.isAnnotationPresent(Test.class))
             .filter(method -> method.getAnnotation(Test.class).isPublic() == this.runPublicTests)
-            .sorted((m1, m2) -> m1.getName().compareTo(m2.getName()))
+            .sorted((m1, m2) -> compareTwoTestMethods(m1, m2))
             .forEach(method -> {
                 try {
                     Test t = method.getAnnotation(Test.class);
-                    comment(String.format("- [%.2f%%]: ", t.weight() * 100) + t.description());
+                    comment(String.format("- [%.2f%%]: ", t.weight() * 100) + t.description(), !this.runPublicTests);
                     results.clear();
                     // To prevent console injection attacks console output is redirected
                     redirect();
                     method.invoke(this);
                     reset(); // Resetting from console (stdout) redirection
-                    grade(t.weight(), results);
-                    comment("");
+                    boolean allGood = grade(t.weight(), results);
+                    if (!allGood && this.stopEarly){
+                        comment("The last test failed and the test pipeline was interrupted.", !this.runPublicTests);
+                        throw new RuntimeException("The last test failed and the test pipeline was interrupted.");
+                    }
                 } catch (Exception ex) {
                     reset();
-                    comment("Test " + method.getName() + " failed completely." + ex);
+                    comment("Test '" + method.getName() + "' failed completely." + ex, !this.runPublicTests);
                     grade();
                 }
                 results.clear();
@@ -273,12 +298,12 @@ public class Evaluator {
                 try {
                     results.clear();
                     Inspection i = method.getAnnotation(Inspection.class);
-                    comment("- " + i.description());
+                    comment("- " + i.description(), !this.runPublicTests);
                     method.invoke(this);
                     //grade();
-                    comment("");
+                    comment("", !this.runPublicTests);
                 } catch (Exception ex) {
-                    comment("Inspection " + method.getName() + " failed completely." + ex);
+                    comment("Inspection '" + method.getName() + "' failed completely." + ex, !this.runPublicTests);
                     //grade();
                 }
                 results.clear();
@@ -305,20 +330,20 @@ public class Evaluator {
                     if (Config.CHECKSTYLE_IGNORES.stream().anyMatch(ignore -> result.contains(ignore))) continue;
 
                     String msg = result.substring(result.indexOf(file));
-                    comment(msg);
+                    comment(msg, !this.runPublicTests);
                     this.totalPoints -= Config.CHECKSTYLE_PENALTY;
                 }
             }
             in.close();
-            if (this.totalPoints >= 0) comment("Everything fine");
+            if (this.totalPoints >= 0) comment("Everything fine", !this.runPublicTests);
             if (this.totalPoints < 0) {
                 String msg = String.format("[CHECKSTYLE] Found violations (%d%%)", (int)(this.totalPoints));
-                comment(msg);
+                comment(msg, !this.runPublicTests);
             }
             grade();
         } catch (Exception ex) {
-            comment("You are so lucky! We had problems processing the checkstyle.log.");
-            comment("This was due to: " + ex);
+            comment("You are so lucky! We had problems processing the checkstyle.log.", !this.runPublicTests);
+            comment("This was due to: " + ex, !this.runPublicTests);
             grade();
         }
     }
@@ -358,22 +383,25 @@ public class Evaluator {
     public static final void main(String[] args) {
         try {
             Constraints check = (Constraints)Class.forName("Checks").getDeclaredConstructor().newInstance();
-            if (args.length == 1){
-                if (args[0].toLowerCase().equals("private")){
+            for (String arg: args) {
+                if (arg.toLowerCase().equals("private")) {
                     check.runPublicTests = false;
+                }
+                if (arg.toLowerCase().equals("stopearly")) {
+                    check.stopEarly = true;
                 }
             }
             check.initStdOutRedirection();
-            comment("JEdUnit " + Config.VERSION);
-            comment("");
+            //comment("JEdUnit " + Config.VERSION, !this.runPublicTests);
+            comment("", !check.runPublicTests);
             check.configure();
             if (Config.CHECKSTYLE) check.checkstyle();
-            comment("");
+            comment("", !check.runPublicTests);
             check.runInspections();
             check.runTests();
-            comment(String.format("Finished: %d points", check.getPoints()));
+            comment(String.format("Finished: %d points", check.getPoints()), !check.runPublicTests);
         } catch (Exception ex) {
-            comment("Severe error: " + ex);
+            comment("Severe error: " + ex, false);
         }
     }
 }

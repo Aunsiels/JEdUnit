@@ -75,7 +75,7 @@ public class Constraints extends Evaluator {
                    .exists()
             ));
         }
-        comment("Everything fine");
+        comment("Everything fine", !this.runPublicTests);
     }
 
     @Inspection(description="Inspect source files for coding violations")
@@ -85,7 +85,7 @@ public class Constraints extends Evaluator {
 
             File f = new File(file);
             if (!f.exists()) {
-                comment("File not found: " + file); 
+                comment("File not found: " + file, !this.runPublicTests);
                 allfine &= false;
                 continue; 
             }
@@ -167,7 +167,7 @@ public class Constraints extends Evaluator {
             }
         }
         
-        if (allfine) comment("Everything fine");
+        if (allfine) comment("Everything fine", !this.runPublicTests);
     }
 
     /**
@@ -268,14 +268,14 @@ public class Constraints extends Evaluator {
 
         // Report results
         if (verbose) {
-            comment("Checking class structure: " + sub.getFile());
+            comment("Checking class structure: " + sub.getFile(), !this.runPublicTests);
             result.forEach(r -> {
                 grading(r.getPoints(), r.comment(), () -> r.ok(), true);
                 if (r.violates()) {
                     comment(sub.getFile(), r.getNode().getRange(), r.comment());
                 }
             });
-            comment("");
+            comment("", !this.runPublicTests);
         }
         return result;
     }

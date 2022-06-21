@@ -16,4 +16,5 @@ public @interface Test {
     double weight();
     String description();
     boolean isPublic() default true;
+    double priority() default 1;
 }

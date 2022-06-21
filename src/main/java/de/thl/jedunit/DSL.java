@@ -22,6 +22,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.LambdaExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.DoStmt;
 import com.github.javaparser.ast.stmt.ForEachStmt;
@@ -104,6 +105,8 @@ public class DSL {
      */
     public final static Class<LambdaExpr> LAMBDA = LambdaExpr.class;
 
+    public final static Class<MethodCallExpr> METHODCALLEXPR = MethodCallExpr.class;
+
     /**
      * Abbreviation to select blocks.
      */
@@ -160,6 +163,14 @@ public class DSL {
             System.out.println("<|--");
             System.out.println(c);
             System.out.println("--|>");
+        }
+    }
+
+    public static void comment(String c, boolean useVPLSyntax) {
+        if (c.length() > 0) {
+            if (useVPLSyntax) System.out.println("<|--");
+            System.out.println(c);
+            if (useVPLSyntax) System.out.println("--|>");
         }
     }
 
