@@ -67,6 +67,7 @@ public class TestSeries<T> {
      * @param points Constant points for each testcase.
      * @param matches Predicate to check wether expected results matches the actual result.
      * @param expected Lambda function to report the call and expected outcome.
+     * @param expected Lambda function to report the call and expected outcome.
      * @param actual Lambda function to report the actual outcome (in case of a none match)
      */
     public void each(

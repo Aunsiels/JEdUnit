@@ -12,6 +12,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Scanner;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import io.vavr.Tuple2;
 
@@ -197,9 +198,10 @@ public class Evaluator {
      */
     public boolean grade() {
         reset();
-        comment(String.format("Current number of points: %.0f%%", this.totalPoints / this.totalMaxPoints * 100.0),
+        comment(String.format("Current number of points: %.0f", this.totalPoints / this.totalMaxPoints * 100.0),
                 !this.runPublicTests);
-        System.out.println("Grade :=>> " + this.getPoints());
+        if (!this.runPublicTests)
+            System.out.println("Grade :=>> " + this.getPoints());
         redirect();
         return true;
     }
@@ -254,34 +256,42 @@ public class Evaluator {
      * Methods are executed according to their alphabetical order.
      * Standard out of submissions is redirected to file called console.log;
      */
-    public final void runTests() {
+    public final void runTests() throws Exception {
         reset();
-        allMethodsOf(this.getClass())
+        Stream<Method> stream = allMethodsOf(this.getClass())
             .stream()
             .filter(method -> method.isAnnotationPresent(Test.class))
             .filter(method -> method.getAnnotation(Test.class).isPublic() == this.runPublicTests)
-            .sorted((m1, m2) -> compareTwoTestMethods(m1, m2))
-            .forEach(method -> {
-                try {
-                    Test t = method.getAnnotation(Test.class);
-                    comment(String.format("- [%.2f%%]: ", t.weight() * 100) + t.description(), !this.runPublicTests);
-                    results.clear();
-                    // To prevent console injection attacks console output is redirected
-                    redirect();
-                    method.invoke(this);
-                    reset(); // Resetting from console (stdout) redirection
-                    boolean allGood = grade(t.weight(), results);
-                    if (!allGood && this.stopEarly){
-                        comment("The last test failed and the test pipeline was interrupted.", !this.runPublicTests);
-                        throw new RuntimeException("The last test failed and the test pipeline was interrupted.");
-                    }
-                } catch (Exception ex) {
-                    reset();
-                    comment("Test '" + method.getName() + "' failed completely." + ex, !this.runPublicTests);
-                    grade();
+            .sorted((m1, m2) -> compareTwoTestMethods(m1, m2));
+        boolean stopTests = false;
+        for (Object obj: stream.toArray()){
+            Method method = (Method) obj;
+            try {
+                Test t = method.getAnnotation(Test.class);
+                if (stopTests) {
+                    this.totalMaxPoints += t.weight();
+                    continue;
                 }
+                comment(String.format("- [%.2f%%]: ", t.weight() * 100) + t.description(), !this.runPublicTests);
                 results.clear();
-            });    
+                // To prevent console injection attacks console output is redirected
+                redirect();
+                method.invoke(this);
+                reset(); // Resetting from console (stdout) redirection
+                boolean allGood = grade(t.weight(), results);
+                if (!allGood && this.stopEarly) {
+                    comment("The last test failed and the test pipeline was interrupted.", !this.runPublicTests);
+                    stopTests = true;
+                }
+            } catch (Exception ex) {
+                reset();
+                comment("Test '" + method.getName() + "' failed completely." + ex, !this.runPublicTests);
+                //grade();
+                if (this.runPublicTests) throw ex;
+                if (this.stopEarly) stopTests = true;
+            }
+            results.clear();
+        }
     }
 
     /**
@@ -321,7 +331,7 @@ public class Evaluator {
      */
     public final void checkstyle() {
         try {
-            comment("- Checkstyle");
+            comment("- Checkstyle", !this.runPublicTests);
             Scanner in = new Scanner(new File("checkstyle.log"));
             while (in.hasNextLine()) {
                 String result = in.nextLine();
@@ -380,7 +390,7 @@ public class Evaluator {
      * Runs the evaluation.
      * @param args command line options (not evaluated)
      */
-    public static final void main(String[] args) {
+    public static final void main(String[] args) throws Exception {
         try {
             Constraints check = (Constraints)Class.forName("Checks").getDeclaredConstructor().newInstance();
             for (String arg: args) {
@@ -402,6 +412,7 @@ public class Evaluator {
             comment(String.format("Finished: %d points", check.getPoints()), !check.runPublicTests);
         } catch (Exception ex) {
             comment("Severe error: " + ex, false);
+            throw ex;
         }
     }
 }
