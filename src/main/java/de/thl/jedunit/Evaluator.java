@@ -104,6 +104,13 @@ public class Evaluator {
         grading(p, comment, () -> success, false);
     }
 
+    public final void grading(int p, String description, boolean success, String errorMessage){
+        grading(p, description, success);
+        if (!success){
+            comment(errorMessage, !this.runPublicTests);
+        }
+    }
+
     /**
      * Adds points for grading if a check is passed (wishful behavior).
      * A comment is always printed whether the check was successfull or not.
